@@ -1,0 +1,17 @@
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\dto\ApiError.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\exception\GlobalExceptionHandler.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\controller\HealthController.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\security\JwtService.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\controller\AuthController.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\dto\AuthResponse.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\service\AuthService.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\model\User.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\CampusConnectApplication.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\security\JwtAuthFilter.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\exception\PasswordMismatchException.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\exception\EmailAlreadyExistsException.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\security\UserDetailsServiceImpl.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\dto\RegisterRequest.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\repository\UserRepository.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\dto\LoginRequest.java
+C:\Users\Admin\Downloads\campus-connect-java-backend\campus-connect-java\src\main\java\com\campusconnect\config\SecurityConfig.java
