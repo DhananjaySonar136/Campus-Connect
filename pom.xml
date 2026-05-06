@@ -55,21 +55,19 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- H2 In-Memory Database (swap for PostgreSQL in production) -->
+        <!-- H2 In-Memory Database for local development and tests -->
         <dependency>
             <groupId>com.h2database</groupId>
             <artifactId>h2</artifactId>
             <scope>runtime</scope>
         </dependency>
 
-        <!-- PostgreSQL driver (uncomment for production) -->
-        <!--
+        <!-- PostgreSQL driver for Supabase -->
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-        -->
 
         <!-- JWT — JJWT -->
         <dependency>

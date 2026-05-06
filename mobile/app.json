@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Campus Connect",
+    "slug": "campus-connect-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#f8fafc"
+      }
+    },
+    "extra": {
+      "apiBaseUrl": "http://localhost:8080/api"
+    }
+  }
+}

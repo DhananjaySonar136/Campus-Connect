@@ -198,18 +198,65 @@ Available at: `http://localhost:8080/h2-console`
 
 ## Switching to PostgreSQL (Production)
 
-1. Add PostgreSQL driver to `pom.xml` (already commented in)
-2. Update `application.properties`:
+The project now has two database profiles:
 
-```properties
-spring.datasource.url=jdbc:postgresql://localhost:5432/campusconnect
-spring.datasource.username=your_user
-spring.datasource.password=your_password
-spring.jpa.database-platform=org.hibernate.dialect.PostgreSQLDialect
-spring.jpa.hibernate.ddl-auto=validate
+| Profile | Database | Use |
+|---------|----------|-----|
+| `dev` | H2 in-memory | Default local development/tests |
+| `supabase` | Supabase Postgres | Real cloud database |
+
+### Supabase Setup
+
+1. Open Supabase dashboard.
+2. Go to **Project Settings > Database**.
+3. Copy your Postgres connection details.
+4. Convert the Supabase connection string to JDBC format and set these environment variables.
+
+Supabase may show a URL like:
+
+```text
+postgresql://USER:PASSWORD@HOST:PORT/postgres
 ```
 
-3. Set a strong JWT secret (256-bit hex):
+Use it like this:
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE="supabase"
+$env:SUPABASE_DB_URL="jdbc:postgresql://HOST:PORT/postgres?sslmode=require"
+$env:SUPABASE_DB_USER="USER"
+$env:SUPABASE_DB_PASSWORD="YOUR_SUPABASE_DATABASE_PASSWORD"
+$env:JWT_SECRET="REPLACE_WITH_A_256_BIT_SECRET"
+$env:CORS_ALLOWED_ORIGINS="http://localhost:3000"
+```
+
+For the direct connection, `USER` is often `postgres`. For the pooler connection, `USER` may look like `postgres.YOUR_PROJECT_REF`.
+
+If your internet provider does not support IPv6, use the Supabase pooler host instead of the direct database host. Keep the same JDBC format:
+
+```text
+jdbc:postgresql://YOUR_POOLER_HOST:6543/postgres?sslmode=require
+```
+
+Then run:
+
+```powershell
+mvn spring-boot:run
+```
+
+Hibernate will create/update the `users` table automatically because the Supabase profile uses:
+
+```properties
+spring.jpa.hibernate.ddl-auto=update
+```
+
+For production deployments, prefer migrations and set:
+
+```powershell
+$env:JPA_DDL_AUTO="validate"
+```
+
+Set a strong JWT secret with:
+
 ```bash
 openssl rand -hex 32
 ```
