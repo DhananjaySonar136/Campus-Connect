@@ -1,7 +1,7 @@
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
-import { colors } from '../constants/colors';
+import { useCallback, useState } from 'react';
+import { AnimatedSplashScreen } from '../components/AnimatedSplashScreen';
 import { useAuth } from '../context/AuthContext';
 import { HomeScreen } from '../screens/HomeScreen';
 import { LoginScreen } from '../screens/LoginScreen';
@@ -12,12 +12,15 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export function RootNavigator() {
   const { isAuthenticated, isBootstrapping } = useAuth();
+  const [isSplashVisible, setIsSplashVisible] = useState(true);
 
-  if (isBootstrapping) {
+  const handleSplashFinish = useCallback(() => {
+    setIsSplashVisible(false);
+  }, []);
+
+  if (isSplashVisible) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
+      <AnimatedSplashScreen isReady={!isBootstrapping} onFinish={handleSplashFinish} />
     );
   }
 
@@ -36,12 +39,3 @@ export function RootNavigator() {
     </NavigationContainer>
   );
 }
-
-const styles = StyleSheet.create({
-  loading: {
-    alignItems: 'center',
-    backgroundColor: colors.background,
-    flex: 1,
-    justifyContent: 'center'
-  }
-});
