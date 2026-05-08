@@ -3,6 +3,7 @@ D:\Campus-Connect\src\main\java\com\campusconnect\CampusConnectApplication.java
 D:\Campus-Connect\src\main\java\com\campusconnect\dto\AuthResponse.java
 D:\Campus-Connect\src\main\java\com\campusconnect\config\SecurityConfig.java
 D:\Campus-Connect\src\main\java\com\campusconnect\security\UserDetailsServiceImpl.java
+D:\Campus-Connect\src\main\java\com\campusconnect\dto\UpdateProfileRequest.java
 D:\Campus-Connect\src\main\java\com\campusconnect\repository\UserRepository.java
 D:\Campus-Connect\src\main\java\com\campusconnect\controller\HealthController.java
 D:\Campus-Connect\src\main\java\com\campusconnect\exception\EmailAlreadyExistsException.java
