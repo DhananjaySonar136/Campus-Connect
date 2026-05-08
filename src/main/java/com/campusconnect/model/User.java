@@ -26,6 +26,9 @@ public class User {
     @Column(nullable = false, length = 100)
     private String university;
 
+    @Column(length = 500)
+    private String profilePhotoUrl;
+
     @Column(nullable = false)
     private String password;
 
