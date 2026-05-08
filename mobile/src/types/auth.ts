@@ -3,6 +3,7 @@ export type User = {
   name: string;
   email: string;
   university: string;
+  profilePhotoUrl?: string | null;
   role: string;
   createdAt: string;
 };
@@ -20,6 +21,12 @@ export type RegisterPayload = {
   confirmPassword: string;
 };
 
+export type UpdateProfilePayload = {
+  name: string;
+  university: string;
+  profilePhotoUrl?: string | null;
+};
+
 export type AuthResponse = {
   success: true;
   message: string;
@@ -34,6 +41,7 @@ export type AuthContextValue = {
   login: (payload: LoginPayload) => Promise<void>;
   logout: () => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
+  updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
   token: string | null;
   user: User | null;
 };
