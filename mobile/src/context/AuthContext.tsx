@@ -1,9 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { getCurrentUser, login as loginRequest, register as registerRequest } from '../api/authApi';
+import {
+  getCurrentUser,
+  login as loginRequest,
+  register as registerRequest,
+  updateCurrentUser
+} from '../api/authApi';
 import { getApiErrorMessage } from '../api/client';
 import { clearStoredAuth, getStoredToken, saveStoredAuth } from '../storage/authStorage';
-import { AuthContextValue, LoginPayload, RegisterPayload, User } from '../types/auth';
+import { AuthContextValue, LoginPayload, RegisterPayload, UpdateProfilePayload, User } from '../types/auth';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
@@ -77,6 +82,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setUser(null);
   }, []);
 
+  const updateProfile = useCallback(
+    async (payload: UpdateProfilePayload) => {
+      setIsSubmitting(true);
+
+      try {
+        const updatedUser = await updateCurrentUser(payload);
+        if (token) {
+          await saveStoredAuth(token, updatedUser);
+        }
+        setUser(updatedUser);
+      } catch (error) {
+        throw new Error(getApiErrorMessage(error));
+      } finally {
+        setIsSubmitting(false);
+      }
+    },
+    [token]
+  );
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isAuthenticated: Boolean(token && user),
@@ -85,10 +109,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       register,
+      updateProfile,
       token,
       user
     }),
-    [isBootstrapping, isSubmitting, login, logout, register, token, user]
+    [isBootstrapping, isSubmitting, login, logout, register, token, updateProfile, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
