@@ -3,6 +3,7 @@ package com.campusconnect.controller;
 import com.campusconnect.dto.AuthResponse;
 import com.campusconnect.dto.LoginRequest;
 import com.campusconnect.dto.RegisterRequest;
+import com.campusconnect.dto.UpdateProfileRequest;
 import com.campusconnect.service.AuthService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,19 @@ public class AuthController {
     public ResponseEntity<?> getCurrentUser(
             @AuthenticationPrincipal UserDetails userDetails) {
         AuthResponse.UserDto user = authService.getCurrentUser(userDetails.getUsername());
+        return ResponseEntity.ok(user);
+    }
+
+    /**
+     * PATCH /api/auth/me
+     * Update the currently authenticated user's profile.
+     * Requires: Authorization: Bearer <token>
+     */
+    @PatchMapping("/me")
+    public ResponseEntity<AuthResponse.UserDto> updateCurrentUser(
+            @AuthenticationPrincipal UserDetails userDetails,
+            @Valid @RequestBody UpdateProfileRequest request) {
+        AuthResponse.UserDto user = authService.updateCurrentUser(userDetails.getUsername(), request);
         return ResponseEntity.ok(user);
     }
 }
