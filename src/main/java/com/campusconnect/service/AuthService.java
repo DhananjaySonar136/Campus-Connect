@@ -3,6 +3,7 @@ package com.campusconnect.service;
 import com.campusconnect.dto.AuthResponse;
 import com.campusconnect.dto.LoginRequest;
 import com.campusconnect.dto.RegisterRequest;
+import com.campusconnect.dto.UpdateProfileRequest;
 import com.campusconnect.exception.EmailAlreadyExistsException;
 import com.campusconnect.exception.PasswordMismatchException;
 import com.campusconnect.model.User;
@@ -108,6 +109,29 @@ public class AuthService {
         return toUserDto(user);
     }
 
+    @Transactional
+    public AuthResponse.UserDto updateCurrentUser(String email, UpdateProfileRequest request) {
+        User user = userRepository.findByEmailIgnoreCase(email)
+                .orElseThrow(() -> new RuntimeException("User not found"));
+
+        if (request.getName() != null) {
+            user.setName(request.getName().trim());
+        }
+
+        if (request.getUniversity() != null) {
+            user.setUniversity(request.getUniversity().trim());
+        }
+
+        if (request.getProfilePhotoUrl() != null) {
+            String photoUrl = request.getProfilePhotoUrl().trim();
+            user.setProfilePhotoUrl(photoUrl.isEmpty() ? null : photoUrl);
+        }
+
+        User saved = userRepository.save(user);
+        log.info("User profile updated: {}", saved.getEmail());
+        return toUserDto(saved);
+    }
+
     // ── Mapper ────────────────────────────────────────────────────────────────
 
     private AuthResponse.UserDto toUserDto(User user) {
@@ -116,6 +140,7 @@ public class AuthService {
                 .name(user.getName())
                 .email(user.getEmail())
                 .university(user.getUniversity())
+                .profilePhotoUrl(user.getProfilePhotoUrl())
                 .role(user.getRole().name())
                 .createdAt(user.getCreatedAt())
                 .build();
