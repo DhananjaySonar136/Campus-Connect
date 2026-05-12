@@ -7,7 +7,13 @@ import {
   updateCurrentUser
 } from '../api/authApi';
 import { getApiErrorMessage } from '../api/client';
-import { clearStoredAuth, getStoredToken, saveStoredAuth } from '../storage/authStorage';
+import {
+  clearStoredAuth,
+  getStoredProfilePhoto,
+  getStoredToken,
+  saveStoredAuth,
+  saveStoredProfilePhoto
+} from '../storage/authStorage';
 import { AuthContextValue, LoginPayload, RegisterPayload, UpdateProfilePayload, User } from '../types/auth';
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -32,7 +38,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       setToken(storedToken);
       const profile = await getCurrentUser();
-      setUser(profile);
+      const localPhoto = await getStoredProfilePhoto();
+      setUser({ ...profile, profilePhotoUrl: localPhoto || profile.profilePhotoUrl || null });
     } catch {
       await clearStoredAuth();
       setToken(null);
@@ -51,9 +58,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const response = await loginRequest(payload);
-      await saveStoredAuth(response.token, response.user);
+      const localPhoto = await getStoredProfilePhoto();
+      const nextUser = { ...response.user, profilePhotoUrl: localPhoto || response.user.profilePhotoUrl || null };
+      await saveStoredAuth(response.token, nextUser);
       setToken(response.token);
-      setUser(response.user);
+      setUser(nextUser);
     } catch (error) {
       throw new Error(getApiErrorMessage(error));
     } finally {
@@ -66,9 +75,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     try {
       const response = await registerRequest(payload);
-      await saveStoredAuth(response.token, response.user);
+      const localPhoto = await getStoredProfilePhoto();
+      const nextUser = { ...response.user, profilePhotoUrl: localPhoto || response.user.profilePhotoUrl || null };
+      await saveStoredAuth(response.token, nextUser);
       setToken(response.token);
-      setUser(response.user);
+      setUser(nextUser);
     } catch (error) {
       throw new Error(getApiErrorMessage(error));
     } finally {
@@ -101,6 +112,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     [token]
   );
 
+  const setLocalProfilePhoto = useCallback(async (photoUri: string | null) => {
+    await saveStoredProfilePhoto(photoUri);
+    setUser((current) => {
+      if (!current) {
+        return current;
+      }
+
+      return { ...current, profilePhotoUrl: photoUri };
+    });
+  }, []);
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isAuthenticated: Boolean(token && user),
@@ -109,11 +131,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       login,
       logout,
       register,
+      setLocalProfilePhoto,
       updateProfile,
       token,
       user
     }),
-    [isBootstrapping, isSubmitting, login, logout, register, token, updateProfile, user]
+    [isBootstrapping, isSubmitting, login, logout, register, setLocalProfilePhoto, token, updateProfile, user]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

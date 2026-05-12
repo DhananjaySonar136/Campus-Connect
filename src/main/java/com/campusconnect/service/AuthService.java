@@ -11,6 +11,7 @@ import com.campusconnect.repository.UserRepository;
 import com.campusconnect.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -20,16 +21,26 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
+import java.util.Set;
+import java.util.stream.Collectors;
+
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class AuthService {
+    private static final Set<String> HARDCODED_PLATFORM_ADMINS = Set.of(
+            "myadmin@gmail.com"
+    );
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuthenticationManager authenticationManager;
     private final UserDetailsService userDetailsService;
+
+    @Value("${app.platform.admin-emails:}")
+    private String platformAdminEmails;
 
     // ── Register ──────────────────────────────────────────────────────────────
 
@@ -47,12 +58,24 @@ public class AuthService {
         }
 
         // 3. Build and persist user
+        User.Role requestedRole = parseRequestedRole(request.getRequestedRole());
+        boolean isPlatformAdmin = isPlatformAdminEmail(request.getEmail());
+
+        User.Role role = isPlatformAdmin
+                ? User.Role.PLATFORM_ADMIN
+                : normalizeDbCompatibleRole(requestedRole);
+
+        User.ApprovalStatus approvalStatus = isCollegeAdminRole(role)
+                ? User.ApprovalStatus.PENDING
+                : User.ApprovalStatus.APPROVED;
+
         User user = User.builder()
                 .name(request.getName().trim())
                 .email(request.getEmail().toLowerCase())
                 .university(request.getUniversity().trim())
                 .password(passwordEncoder.encode(request.getPassword()))
-                .role(User.Role.STUDENT)
+                .role(role)
+                .approvalStatus(approvalStatus)
                 .build();
 
         User saved = userRepository.save(user);
@@ -64,7 +87,7 @@ public class AuthService {
 
         return AuthResponse.builder()
                 .success(true)
-                .message("Account created successfully! Welcome to Campus Connect.")
+                .message(buildRegistrationMessage(saved))
                 .token(token)
                 .user(toUserDto(saved))
                 .build();
@@ -142,7 +165,46 @@ public class AuthService {
                 .university(user.getUniversity())
                 .profilePhotoUrl(user.getProfilePhotoUrl())
                 .role(user.getRole().name())
+                .approvalStatus(user.getApprovalStatus().name())
+                .approvalNote(user.getApprovalNote())
                 .createdAt(user.getCreatedAt())
                 .build();
+    }
+
+    private User.Role parseRequestedRole(String requestedRole) {
+        if (requestedRole == null || requestedRole.isBlank()) {
+            return User.Role.STUDENT;
+        }
+
+        return User.Role.valueOf(requestedRole.trim().toUpperCase());
+    }
+
+    private boolean isPlatformAdminEmail(String email) {
+        Set<String> adminEmails = Arrays.stream(platformAdminEmails.split(","))
+                .map(String::trim)
+                .filter(value -> !value.isBlank())
+                .map(String::toLowerCase)
+                .collect(Collectors.toSet());
+
+        String normalizedEmail = email.toLowerCase();
+        return adminEmails.contains(normalizedEmail) || HARDCODED_PLATFORM_ADMINS.contains(normalizedEmail);
+    }
+
+    private String buildRegistrationMessage(User user) {
+        if (isCollegeAdminRole(user.getRole()) && user.getApprovalStatus() == User.ApprovalStatus.PENDING) {
+            return "College admin request submitted. Your account will be activated after platform approval.";
+        }
+        return "Account created successfully! Welcome to Campus Connect.";
+    }
+
+    private User.Role normalizeDbCompatibleRole(User.Role role) {
+        if (role == User.Role.COLLEGE_ADMIN) {
+            return User.Role.ADMIN;
+        }
+        return role;
+    }
+
+    private boolean isCollegeAdminRole(User.Role role) {
+        return role == User.Role.COLLEGE_ADMIN || role == User.Role.ADMIN;
     }
 }

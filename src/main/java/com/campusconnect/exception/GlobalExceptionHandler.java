@@ -87,6 +87,28 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(error);
     }
 
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleIllegalArgument(IllegalArgumentException ex) {
+        ApiError error = ApiError.builder()
+                .success(false)
+                .message(ex.getMessage())
+                .timestamp(Instant.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(error);
+    }
+
+    @ExceptionHandler(IllegalStateException.class)
+    public ResponseEntity<ApiError> handleIllegalState(IllegalStateException ex) {
+        ApiError error = ApiError.builder()
+                .success(false)
+                .message(ex.getMessage())
+                .timestamp(Instant.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(error);
+    }
+
     // ── Catch-all ─────────────────────────────────────────────────────────────
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiError> handleGenericException(Exception ex) {
@@ -94,7 +116,7 @@ public class GlobalExceptionHandler {
 
         ApiError error = ApiError.builder()
                 .success(false)
-                .message("An unexpected error occurred. Please try again.")
+                .message(ex.getMessage() == null ? "An unexpected error occurred. Please try again." : ex.getMessage())
                 .timestamp(Instant.now())
                 .build();
 

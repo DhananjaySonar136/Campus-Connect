@@ -22,6 +22,8 @@ public class AuthResponse {
         private String university;
         private String profilePhotoUrl;
         private String role;
+        private String approvalStatus;
+        private String approvalNote;
         private Instant createdAt;
     }
 }

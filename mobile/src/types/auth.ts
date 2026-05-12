@@ -5,6 +5,8 @@ export type User = {
   university: string;
   profilePhotoUrl?: string | null;
   role: string;
+  approvalStatus?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvalNote?: string | null;
   createdAt: string;
 };
 
@@ -19,6 +21,7 @@ export type RegisterPayload = {
   university: string;
   password: string;
   confirmPassword: string;
+  requestedRole?: 'STUDENT' | 'COLLEGE_ADMIN';
 };
 
 export type UpdateProfilePayload = {
@@ -42,6 +45,7 @@ export type AuthContextValue = {
   logout: () => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   updateProfile: (payload: UpdateProfilePayload) => Promise<void>;
+  setLocalProfilePhoto: (photoUri: string | null) => Promise<void>;
   token: string | null;
   user: User | null;
 };

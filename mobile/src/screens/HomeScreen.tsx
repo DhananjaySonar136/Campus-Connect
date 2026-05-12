@@ -1,5 +1,7 @@
-import { useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
+import * as ImagePicker from 'expo-image-picker';
 import {
+  Alert,
   Image,
   ImageSourcePropType,
   Pressable,
@@ -10,9 +12,11 @@ import {
   View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { createEvent, listEvents } from '../api/eventsApi';
 import { colors } from '../constants/colors';
 import { useAuth } from '../context/AuthContext';
 import type { User } from '../types/auth';
+import type { CreateEventPayload, EventItem } from '../types/event';
 
 type TabKey = 'home' | 'events' | 'jobs' | 'study' | 'profile';
 
@@ -40,9 +44,43 @@ const tabs: Array<{ key: TabKey; label: string; icon: string }> = [
 ];
 
 export function HomeScreen() {
-  const { logout, updateProfile, user, isSubmitting } = useAuth();
+  const { logout, setLocalProfilePhoto, updateProfile, user, isSubmitting } = useAuth();
   const [activeTab, setActiveTab] = useState<TabKey>('home');
+  const [events, setEvents] = useState<EventItem[]>([]);
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
   const displayName = useMemo(() => user?.name?.split(' ')[0] || 'Alex', [user?.name]);
+  const isStudent = user?.role === 'STUDENT';
+  const canCreateAdminContent = useMemo(
+    () =>
+      user?.role === 'PLATFORM_ADMIN' ||
+      ((user?.role === 'COLLEGE_ADMIN' || user?.role === 'ADMIN') && user?.approvalStatus === 'APPROVED'),
+    [user?.approvalStatus, user?.role]
+  );
+  const showEventApprovalMessage = useMemo(
+    () =>
+      !canCreateAdminContent &&
+      (user?.role === 'COLLEGE_ADMIN' || user?.role === 'ADMIN') &&
+      user?.approvalStatus !== 'APPROVED',
+    [canCreateAdminContent, user?.approvalStatus, user?.role]
+  );
+  const isAdminPendingApproval = showEventApprovalMessage;
+  const showAddAction =
+    activeTab !== 'profile' &&
+    !isAdminPendingApproval &&
+    (!isStudent || (activeTab !== 'events' && activeTab !== 'jobs' && activeTab !== 'study'));
+
+  useEffect(() => {
+    const loadEvents = async () => {
+      try {
+        const response = await listEvents();
+        setEvents(response);
+      } catch {
+        setEvents([]);
+      }
+    };
+
+    loadEvents();
+  }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -53,19 +91,40 @@ export function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {activeTab === 'home' && <HomeDashboard name={displayName} />}
-        {activeTab === 'events' && <EventsScreen />}
+        {activeTab === 'events' && (
+          <EventsScreen
+            canCreateEvents={canCreateAdminContent}
+            showApprovalMessage={showEventApprovalMessage}
+            events={events}
+            isCreatingEvent={isCreatingEvent}
+            onCreateEvent={async (payload) => {
+              setIsCreatingEvent(true);
+              try {
+                const created = await createEvent(payload);
+                setEvents((prev) => [created, ...prev]);
+                Alert.alert('Success', 'Event published successfully.');
+              } catch {
+                Alert.alert('Could not create event', 'Check all event details and your admin approval status.');
+              } finally {
+                setIsCreatingEvent(false);
+              }
+            }}
+          />
+        )}
         {activeTab === 'jobs' && <JobsScreen />}
-        {activeTab === 'study' && <StudyScreen />}
+        {activeTab === 'study' && <StudyScreen canCreateStudyMaterial={canCreateAdminContent} />}
         {activeTab === 'profile' && (
           <ProfileScreen
+            canEditProfile={!isAdminPendingApproval}
             isSaving={isSubmitting}
             onLogout={logout}
+            onPickPhoto={setLocalProfilePhoto}
             onSave={updateProfile}
             user={user}
           />
         )}
       </ScrollView>
-      {activeTab !== 'profile' && <FloatingAction icon={activeTab === 'study' ? '✎' : '+'} />}
+      {showAddAction && <FloatingAction icon={activeTab === 'study' ? '✎' : '+'} />}
       <BottomTabs activeTab={activeTab} onChange={setActiveTab} />
     </SafeAreaView>
   );
@@ -95,8 +154,20 @@ function HomeDashboard({ name }: { name: string }) {
   return (
     <>
       <View style={styles.heroIntro}>
-        <Text style={styles.h1}>Hello, {name} 👋</Text>
-        <Text style={styles.lead}>You have 3 classes today and 2 upcoming events.</Text>
+        <View style={styles.heroCard}>
+          <Text style={styles.h1}>Hello, {name}</Text>
+          <Text style={styles.lead}>You have 3 classes today and 2 upcoming events.</Text>
+          <View style={styles.heroStatsRow}>
+            <View style={styles.heroStatPill}>
+              <Text style={styles.heroStatLabel}>Next class</Text>
+              <Text style={styles.heroStatValue}>10:30 AM</Text>
+            </View>
+            <View style={styles.heroStatPill}>
+              <Text style={styles.heroStatLabel}>Due today</Text>
+              <Text style={styles.heroStatValue}>2 tasks</Text>
+            </View>
+          </View>
+        </View>
       </View>
 
       <SectionTitle title="Quick Access" />
@@ -114,7 +185,7 @@ function HomeDashboard({ name }: { name: string }) {
       <SectionTitle title="Curated For You" />
       <View style={styles.curatedGrid}>
         <View style={styles.curatedTall}>
-          <Text style={styles.curatedIcon}>♢</Text>
+          <Text style={styles.curatedIcon}>▣</Text>
           <Text style={styles.curatedTitle}>Summer Internships are open!</Text>
           <Text style={styles.curatedCopy}>Apply for top-tier tech roles directly through our partner portal.</Text>
           <View style={styles.whitePill}>
@@ -138,40 +209,100 @@ function HomeDashboard({ name }: { name: string }) {
   );
 }
 
-function EventsScreen() {
+function EventsScreen({
+  canCreateEvents,
+  showApprovalMessage,
+  events,
+  isCreatingEvent,
+  onCreateEvent
+}: {
+  canCreateEvents: boolean;
+  showApprovalMessage: boolean;
+  events: EventItem[];
+  isCreatingEvent: boolean;
+  onCreateEvent: (payload: CreateEventPayload) => Promise<void>;
+}) {
+  const [eventName, setEventName] = useState('');
+  const [eventDate, setEventDate] = useState('');
+  const [startTime, setStartTime] = useState('');
+  const [endTime, setEndTime] = useState('');
+  const [venue, setVenue] = useState('');
+  const [collegeName, setCollegeName] = useState('');
+  const [city, setCity] = useState('');
+  const [state, setState] = useState('');
+  const [category, setCategory] = useState('');
+  const [description, setDescription] = useState('');
+  const [organizerName, setOrganizerName] = useState('');
+  const [organizerEmail, setOrganizerEmail] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [registrationLink, setRegistrationLink] = useState('');
+  const [bannerImageUrl, setBannerImageUrl] = useState('');
+
   return (
     <>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-        <Filter active label="☷ By Date" />
-        <Filter label="By College" />
-        <Filter label="Near Me" />
-      </ScrollView>
-      <EventCard
-        image={images.techHall}
-        title="Annual Tech Symposium 2024"
-        college="Faculty of Engineering"
-        date="Oct 24, 2024 • 10:00 AM"
-        place="Main Auditorium, Building A"
-        action="Register"
-        live
-      />
-      <EventCard
-        image={images.campusEvent}
-        title="Spring Jazz Nights"
-        college="Conservatory of Music"
-        date="Oct 26, 2024 • 07:00 PM"
-        place="University Courtyard"
-        action="Interested"
-        interest="2.4k interested"
-      />
-      <View style={styles.compactEvent}>
-        <Image source={images.workshop} style={styles.compactImage} />
-        <View style={styles.flex}>
-          <Text style={styles.compactTitle}>Startup Pitch Deck Workshop</Text>
-          <Text style={styles.linkText}>Business School</Text>
-          <Text style={styles.mutedLine}>◷ Tomorrow • 2:00 PM</Text>
+      <Text style={styles.screenTitle}>Campus Events</Text>
+      {canCreateEvents ? (
+        <View style={styles.eventFormCard}>
+          <Text style={styles.formTitle}>Add Event</Text>
+          <TextInput value={eventName} onChangeText={setEventName} placeholder="Event name" style={styles.profileInput} />
+          <TextInput value={eventDate} onChangeText={setEventDate} placeholder="Date (YYYY-MM-DD)" style={styles.profileInput} />
+          <TextInput value={startTime} onChangeText={setStartTime} placeholder="Start time (HH:mm)" style={styles.profileInput} />
+          <TextInput value={endTime} onChangeText={setEndTime} placeholder="End time (HH:mm)" style={styles.profileInput} />
+          <TextInput value={venue} onChangeText={setVenue} placeholder="Venue" style={styles.profileInput} />
+          <TextInput value={collegeName} onChangeText={setCollegeName} placeholder="College name" style={styles.profileInput} />
+          <TextInput value={city} onChangeText={setCity} placeholder="City" style={styles.profileInput} />
+          <TextInput value={state} onChangeText={setState} placeholder="State" style={styles.profileInput} />
+          <TextInput value={category} onChangeText={setCategory} placeholder="Category (Tech, Cultural, Sports...)" style={styles.profileInput} />
+          <TextInput value={description} onChangeText={setDescription} placeholder="Event description (20+ chars)" style={styles.profileInput} multiline />
+          <TextInput value={organizerName} onChangeText={setOrganizerName} placeholder="Organizer name" style={styles.profileInput} />
+          <TextInput value={organizerEmail} onChangeText={setOrganizerEmail} placeholder="Organizer email" style={styles.profileInput} />
+          <TextInput value={contactPhone} onChangeText={setContactPhone} placeholder="Contact phone" style={styles.profileInput} />
+          <TextInput value={registrationLink} onChangeText={setRegistrationLink} placeholder="Registration link (optional)" style={styles.profileInput} />
+          <TextInput value={bannerImageUrl} onChangeText={setBannerImageUrl} placeholder="Banner image URL (optional)" style={styles.profileInput} />
+          <Pressable
+            disabled={isCreatingEvent}
+            onPress={async () => {
+              await onCreateEvent({
+                eventName,
+                eventDate,
+                startTime,
+                endTime,
+                venue,
+                collegeName,
+                city,
+                state,
+                category,
+                description,
+                organizerName,
+                organizerEmail,
+                contactPhone,
+                registrationLink,
+                bannerImageUrl
+              });
+            }}
+            style={[styles.profileActionButton, styles.profileSaveButton, isCreatingEvent && styles.profileDisabledButton]}
+          >
+            <Text style={styles.profileSaveText}>{isCreatingEvent ? 'Publishing...' : 'Publish Event'}</Text>
+          </Pressable>
         </View>
-      </View>
+      ) : showApprovalMessage ? (
+        <Text style={styles.mutedLine}>Waiting for platform admin approval. You can add events after approval.</Text>
+      ) : null
+      }
+
+      {events.map((event) => (
+        <EventCard
+          key={event.id}
+          image={event.bannerImageUrl ? { uri: event.bannerImageUrl } : images.campusEvent}
+          title={event.eventName}
+          college={event.collegeName}
+          date={`${event.eventDate} • ${event.startTime} - ${event.endTime}`}
+          place={`${event.venue}, ${event.city}`}
+          action="View"
+          interest={event.category}
+        />
+      ))}
+      {events.length === 0 ? <Text style={styles.mutedLine}>No events yet.</Text> : null}
     </>
   );
 }
@@ -208,7 +339,7 @@ function JobsScreen() {
   );
 }
 
-function StudyScreen() {
+function StudyScreen({ canCreateStudyMaterial }: { canCreateStudyMaterial: boolean }) {
   return (
     <>
       <View style={styles.summaryCard}>
@@ -223,10 +354,14 @@ function StudyScreen() {
         <Filter label="Mathematics" />
         <Filter label="Computer Science" />
       </ScrollView>
-      <View style={styles.createNote}>
-        <Text style={styles.createIcon}>⊕</Text>
-        <Text style={styles.createText}>Create New Note</Text>
-      </View>
+      {canCreateStudyMaterial ? (
+        <View style={styles.createNote}>
+          <Text style={styles.createIcon}>⊕</Text>
+          <Text style={styles.createText}>Create New Note</Text>
+        </View>
+      ) : (
+        <Text style={styles.mutedLine}>Waiting for platform admin approval. You can add notes after approval.</Text>
+      )}
       <NoteCard tag="Mathematics" title="Calculus II: Taylor Series" body="Discussion on convergence of power series and the radius of convergence. Remember to review the remainder..." foot="Updated 2h ago" />
       <NoteCard tag="Computer Science" title="Data Structures: Red-Black Trees" body="Rules for balancing: 1. Every node is red or black. 2. Root is black. 3. Every leaf (NIL) is black. 4. Red node children are..." foot="Updated Yesterday" warm />
       <View style={styles.imageNote}>
@@ -245,22 +380,25 @@ function StudyScreen() {
 }
 
 function ProfileScreen({
+  canEditProfile,
   isSaving,
   onLogout,
+  onPickPhoto,
   onSave,
   user
 }: {
+  canEditProfile: boolean;
   isSaving: boolean;
   onLogout: () => void;
+  onPickPhoto: (photoUri: string | null) => Promise<void>;
   onSave: (payload: { name: string; university: string; profilePhotoUrl?: string | null }) => Promise<void>;
   user: User | null;
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [draftName, setDraftName] = useState(user?.name || '');
   const [draftUniversity, setDraftUniversity] = useState(user?.university || '');
-  const [draftPhotoUrl, setDraftPhotoUrl] = useState(user?.profilePhotoUrl || '');
   const [formError, setFormError] = useState('');
-  const photoPreview = draftPhotoUrl.trim() ? { uri: draftPhotoUrl.trim() } : getProfileImageSource(user);
+  const photoPreview = getProfileImageSource(user);
   const joinedDate = user?.createdAt
     ? new Date(user.createdAt).toLocaleDateString(undefined, {
         day: 'numeric',
@@ -273,21 +411,25 @@ function ProfileScreen({
     <View style={styles.profileWrap}>
       <View style={styles.profilePhotoWrap}>
         <Image source={photoPreview} style={styles.profilePhoto} />
-        <Pressable
-          accessibilityRole="button"
-          disabled={isSaving}
-          onPress={() => {
-            setDraftName(user?.name || '');
-            setDraftUniversity(user?.university || '');
-            setDraftPhotoUrl(user?.profilePhotoUrl || '');
-            setFormError('');
-            setIsEditing(true);
-          }}
-          style={styles.editBubble}
-        >
-          <Text style={styles.editText}>✎</Text>
-        </Pressable>
+        {canEditProfile ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={isSaving}
+            onPress={() => {
+              setDraftName(user?.name || '');
+              setDraftUniversity(user?.university || '');
+              setFormError('');
+              setIsEditing(true);
+            }}
+            style={styles.editBubble}
+          >
+            <Text style={styles.editText}>✎</Text>
+          </Pressable>
+        ) : null}
       </View>
+      {!canEditProfile ? (
+        <Text style={styles.mutedLine}>Waiting for platform admin approval. Profile editing is disabled.</Text>
+      ) : null}
       {isEditing ? (
         <View style={styles.editForm}>
           <Text style={styles.inputLabel}>Full Name</Text>
@@ -310,17 +452,33 @@ function ProfileScreen({
             style={styles.profileInput}
             value={draftUniversity}
           />
-          <Text style={styles.inputLabel}>Profile Photo URL</Text>
-          <TextInput
-            autoCapitalize="none"
-            editable={!isSaving}
-            keyboardType="url"
-            onChangeText={setDraftPhotoUrl}
-            placeholder="https://example.com/photo.jpg"
-            placeholderTextColor={colors.muted}
-            style={styles.profileInput}
-            value={draftPhotoUrl}
-          />
+          <Text style={styles.inputLabel}>Profile Photo</Text>
+          <Pressable
+            disabled={isSaving}
+            onPress={async () => {
+              const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+              if (!permission.granted) {
+                setFormError('Gallery access is required to choose a profile photo.');
+                return;
+              }
+
+              const result = await ImagePicker.launchImageLibraryAsync({
+                allowsEditing: true,
+                aspect: [1, 1],
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                quality: 0.8
+              });
+
+              if (!result.canceled && result.assets[0]?.uri) {
+                await onPickPhoto(result.assets[0].uri);
+                setFormError('');
+              }
+            }}
+            style={[styles.profileActionButton, styles.profileCancelButton]}
+          >
+            <Text style={styles.profileCancelText}>Choose from gallery</Text>
+          </Pressable>
           {formError ? <Text style={styles.formError}>{formError}</Text> : null}
           <View style={styles.profileActions}>
             <Pressable
@@ -349,7 +507,7 @@ function ProfileScreen({
                   await onSave({
                     name,
                     university,
-                    profilePhotoUrl: draftPhotoUrl.trim() || null
+                    profilePhotoUrl: user?.profilePhotoUrl || null
                   });
                   setIsEditing(false);
                 } catch (error) {
@@ -440,7 +598,7 @@ function FeaturedEvent() {
       <Image source={images.techHall} style={styles.featuredImage} />
       <View style={styles.featuredOverlay} />
       <View style={styles.featuredText}>
-        <Text style={styles.featuredBadge}>FEATURED</Text>
+        <Text style={styles.featuredBadge}>FEATURED EVENT</Text>
         <Text style={styles.featuredTitle}>Global Tech Symposium</Text>
         <Text style={styles.featuredTime}>◷ Today, 4:00 PM</Text>
       </View>
@@ -754,40 +912,6 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '800'
   },
-  curatedColumn: {
-    flex: 1,
-    gap: 18
-  },
-  curatedCopy: {
-    color: colors.white,
-    fontSize: 18,
-    lineHeight: 28,
-    marginTop: 16
-  },
-  curatedGrid: {
-    flexDirection: 'row',
-    gap: 18,
-    marginHorizontal: 20,
-    marginTop: 8
-  },
-  curatedIcon: {
-    color: colors.white,
-    fontSize: 35
-  },
-  curatedTall: {
-    backgroundColor: colors.primary,
-    borderRadius: 30,
-    flex: 1,
-    minHeight: 265,
-    padding: 24
-  },
-  curatedTitle: {
-    color: colors.white,
-    fontSize: 23,
-    fontWeight: '900',
-    lineHeight: 29,
-    marginTop: 36
-  },
   detailsButton: {
     backgroundColor: '#6200d8',
     borderRadius: 24,
@@ -833,6 +957,16 @@ const styles = StyleSheet.create({
     marginTop: 24,
     width: '100%'
   },
+  eventFormCard: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: 12,
+    borderWidth: 1,
+    gap: 10,
+    marginHorizontal: 24,
+    marginTop: 16,
+    padding: 16
+  },
   eventBody: {
     padding: 22
   },
@@ -872,6 +1006,12 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 28
   },
+  formTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 6
+  },
   fab: {
     alignItems: 'center',
     backgroundColor: colors.primary,
@@ -894,54 +1034,9 @@ const styles = StyleSheet.create({
     fontSize: 34,
     lineHeight: 38
   },
-  featuredBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: colors.primary,
-    borderRadius: 16,
-    color: colors.white,
-    fontSize: 12,
-    fontWeight: '900',
-    letterSpacing: 1,
-    overflow: 'hidden',
-    paddingHorizontal: 12,
-    paddingVertical: 6
-  },
-  featuredCard: {
-    borderRadius: 28,
-    height: 260,
-    marginHorizontal: 20,
-    marginTop: 10,
-    overflow: 'hidden'
-  },
   featuredImage: {
     height: '100%',
     width: '100%'
-  },
-  featuredOverlay: {
-    backgroundColor: 'rgba(0,0,0,0.38)',
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-    right: 0,
-    top: 0
-  },
-  featuredText: {
-    bottom: 24,
-    left: 24,
-    position: 'absolute',
-    right: 24
-  },
-  featuredTime: {
-    color: '#f3f4f8',
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 8
-  },
-  featuredTitle: {
-    color: colors.white,
-    fontSize: 24,
-    fontWeight: '900',
-    marginTop: 12
   },
   filterPill: {
     backgroundColor: '#eeeaf6',
@@ -994,10 +1089,10 @@ const styles = StyleSheet.create({
     letterSpacing: 1
   },
   h1: {
-    color: colors.text,
-    fontSize: 34,
+    color: '#f8fafc',
+    fontSize: 32,
     fontWeight: '900',
-    lineHeight: 40
+    lineHeight: 38
   },
   header: {
     alignItems: 'center',
@@ -1015,7 +1110,38 @@ const styles = StyleSheet.create({
   },
   heroIntro: {
     paddingHorizontal: 20,
-    paddingTop: 32
+    paddingTop: 24
+  },
+  heroCard: {
+    backgroundColor: '#0f172a',
+    borderRadius: 26,
+    paddingHorizontal: 20,
+    paddingVertical: 22
+  },
+  heroStatsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 18
+  },
+  heroStatPill: {
+    backgroundColor: 'rgba(148, 163, 184, 0.18)',
+    borderColor: 'rgba(226, 232, 240, 0.22)',
+    borderRadius: 14,
+    borderWidth: 1,
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10
+  },
+  heroStatLabel: {
+    color: '#cbd5e1',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  heroStatValue: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '800',
+    marginTop: 2
   },
   hotLabel: {
     alignSelf: 'flex-start',
@@ -1029,16 +1155,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7
   },
-  hubCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 28,
-    borderWidth: 1,
-    flex: 1,
-    justifyContent: 'center',
-    minHeight: 130,
-    padding: 20
-  },
   iconPrimary: {
     color: colors.primary,
     fontSize: 24,
@@ -1046,11 +1162,11 @@ const styles = StyleSheet.create({
   },
   iconSoft: {
     alignItems: 'center',
-    backgroundColor: '#eee7ff',
-    borderRadius: 13,
+    backgroundColor: '#dbeafe',
+    borderRadius: 14,
     height: 48,
     justifyContent: 'center',
-    marginBottom: 18,
+    marginBottom: 14,
     width: 48
   },
   imageNote: {
@@ -1149,10 +1265,10 @@ const styles = StyleSheet.create({
     gap: 16
   },
   lead: {
-    color: '#242235',
-    fontSize: 18,
-    lineHeight: 27,
-    marginTop: 6
+    color: '#dbeafe',
+    fontSize: 16,
+    lineHeight: 24,
+    marginTop: 8
   },
   linkText: {
     color: colors.primary,
@@ -1185,14 +1301,14 @@ const styles = StyleSheet.create({
   miniEvent: {
     alignItems: 'center',
     backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 28,
+    borderColor: '#dbe3ef',
+    borderRadius: 18,
     borderWidth: 1,
     flexDirection: 'row',
     gap: 16,
     marginHorizontal: 20,
-    marginTop: 18,
-    padding: 16
+    marginTop: 14,
+    padding: 14
   },
   miniImage: {
     borderRadius: 20,
@@ -1370,29 +1486,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 34
   },
   quickCard: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: 20,
+    backgroundColor: '#ffffff',
+    borderColor: '#dbe3ef',
+    borderRadius: 16,
     borderWidth: 1,
-    height: 142,
-    padding: 18,
-    width: 162
+    height: 136,
+    padding: 16,
+    width: 154
   },
   quickLabel: {
-    color: '#302d3f',
-    fontSize: 14,
-    letterSpacing: 1
+    color: '#64748b',
+    fontSize: 13,
+    letterSpacing: 0.4
   },
   quickRow: {
-    gap: 18,
+    gap: 12,
     paddingHorizontal: 20,
-    paddingVertical: 26
+    paddingVertical: 18
   },
   quickTitle: {
     color: colors.text,
-    fontSize: 17,
+    fontSize: 18,
     fontWeight: '800',
-    marginTop: 5
+    marginTop: 4
   },
   rowBetween: {
     alignItems: 'center',
@@ -1436,20 +1552,20 @@ const styles = StyleSheet.create({
     fontSize: 18
   },
   sectionAction: {
-    color: colors.primary,
-    fontSize: 14,
-    fontWeight: '700'
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '800'
   },
   sectionTitle: {
     color: colors.text,
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '900'
   },
   sectionTitleRow: {
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 28,
+    marginTop: 20,
     paddingHorizontal: 24
   },
   settingsCard: {
@@ -1580,12 +1696,12 @@ const styles = StyleSheet.create({
     marginTop: 5
   },
   tipCard: {
-    backgroundColor: '#eeeaf6',
-    borderRadius: 28,
+    backgroundColor: '#eef2ff',
+    borderRadius: 20,
     flex: 1,
     justifyContent: 'center',
-    minHeight: 150,
-    padding: 20
+    minHeight: 142,
+    padding: 18
   },
   tipTitle: {
     color: colors.text,
@@ -1605,14 +1721,105 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     alignSelf: 'flex-start',
     backgroundColor: colors.white,
-    borderRadius: 24,
-    marginTop: 26,
-    paddingHorizontal: 16,
-    paddingVertical: 13
+    borderRadius: 20,
+    marginTop: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 10
   },
   whitePillText: {
     color: colors.primary,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '900'
+  },
+  curatedColumn: {
+    flex: 1,
+    gap: 12
+  },
+  curatedCopy: {
+    color: '#dbeafe',
+    fontSize: 15,
+    lineHeight: 22,
+    marginTop: 12
+  },
+  curatedGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginHorizontal: 20,
+    marginTop: 8
+  },
+  curatedIcon: {
+    color: '#bfdbfe',
+    fontSize: 28
+  },
+  curatedTall: {
+    backgroundColor: '#1e3a8a',
+    borderRadius: 20,
+    flex: 1,
+    minHeight: 230,
+    padding: 18
+  },
+  curatedTitle: {
+    color: '#eff6ff',
+    fontSize: 20,
+    fontWeight: '900',
+    lineHeight: 25,
+    marginTop: 20
+  },
+  featuredBadge: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#0ea5e9',
+    borderRadius: 14,
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '900',
+    letterSpacing: 0.7,
+    overflow: 'hidden',
+    paddingHorizontal: 10,
+    paddingVertical: 5
+  },
+  featuredCard: {
+    borderRadius: 22,
+    height: 235,
+    marginHorizontal: 20,
+    marginTop: 10,
+    overflow: 'hidden'
+  },
+  featuredOverlay: {
+    backgroundColor: 'rgba(2,6,23,0.45)',
+    bottom: 0,
+    left: 0,
+    position: 'absolute',
+    right: 0,
+    top: 0
+  },
+  featuredText: {
+    bottom: 18,
+    left: 18,
+    position: 'absolute',
+    right: 18
+  },
+  featuredTime: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '700',
+    marginTop: 6
+  },
+  featuredTitle: {
+    color: colors.white,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: 10
+  },
+  hubCard: {
+    backgroundColor: '#ffffff',
+    borderColor: '#dbe3ef',
+    borderRadius: 20,
+    borderWidth: 1,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: 110,
+    padding: 18
   }
 });
+
+

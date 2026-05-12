@@ -37,6 +37,14 @@ public class User {
     @Builder.Default
     private Role role = Role.STUDENT;
 
+    @Column(nullable = false)
+    @Enumerated(EnumType.STRING)
+    @Builder.Default
+    private ApprovalStatus approvalStatus = ApprovalStatus.APPROVED;
+
+    @Column(length = 500)
+    private String approvalNote;
+
     @CreationTimestamp
     @Column(updatable = false)
     private Instant createdAt;
@@ -45,6 +53,10 @@ public class User {
     private Instant updatedAt;
 
     public enum Role {
-        STUDENT, ADMIN
+        STUDENT, ADMIN, COLLEGE_ADMIN, PLATFORM_ADMIN
+    }
+
+    public enum ApprovalStatus {
+        PENDING, APPROVED, REJECTED
     }
 }

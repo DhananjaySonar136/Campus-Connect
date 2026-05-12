@@ -28,4 +28,10 @@ public class RegisterRequest {
 
     @NotBlank(message = "Please confirm your password")
     private String confirmPassword;
+
+    @Pattern(
+        regexp = "^(STUDENT|COLLEGE_ADMIN)?$",
+        message = "requestedRole must be STUDENT or COLLEGE_ADMIN"
+    )
+    private String requestedRole;
 }

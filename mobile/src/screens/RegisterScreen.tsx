@@ -1,6 +1,6 @@
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { useMemo, useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import { AppButton } from '../components/AppButton';
 import { AppTextInput } from '../components/AppTextInput';
 import { AuthHeader } from '../components/AuthHeader';
@@ -22,6 +22,7 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
     university: ''
   });
   const [formError, setFormError] = useState('');
+  const [isCollegeAdminRequest, setIsCollegeAdminRequest] = useState(false);
 
   const passwordHint = useMemo(() => {
     if (!form.password) {
@@ -59,7 +60,8 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
         ...form,
         email: form.email.trim(),
         name: form.name.trim(),
-        university: form.university.trim()
+        university: form.university.trim(),
+        requestedRole: isCollegeAdminRequest ? 'COLLEGE_ADMIN' : 'STUDENT'
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Registration failed.';
@@ -97,6 +99,13 @@ export function RegisterScreen({ navigation }: RegisterScreenProps) {
           placeholder="MIT"
           value={form.university}
         />
+        <View style={styles.switchRow}>
+          <View style={styles.switchTextWrap}>
+            <Text style={styles.switchTitle}>Register as college admin</Text>
+            <Text style={styles.switchSubtitle}>Requires platform approval before posting events.</Text>
+          </View>
+          <Switch value={isCollegeAdminRequest} onValueChange={setIsCollegeAdminRequest} />
+        </View>
         <AppTextInput
           error={passwordHint}
           label="Password"
@@ -142,6 +151,26 @@ const styles = StyleSheet.create({
     marginTop: 24,
     minHeight: 44,
     justifyContent: 'center'
+  },
+  switchRow: {
+    alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 14
+  },
+  switchSubtitle: {
+    color: colors.muted,
+    fontSize: 12,
+    marginTop: 2
+  },
+  switchTextWrap: {
+    flex: 1,
+    paddingRight: 12
+  },
+  switchTitle: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '700'
   },
   switcherText: {
     color: colors.primary,
